@@ -7,3 +7,12 @@
 //
 
 import Foundation
+
+class Game {
+    
+    var title: String
+    
+    init(title: String) {
+        self.title = title
+    }
+}

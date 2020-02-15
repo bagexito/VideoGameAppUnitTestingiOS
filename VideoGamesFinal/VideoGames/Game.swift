@@ -1,5 +1,5 @@
 //
-//  GameListItemViewModel.swift
+//  Game.swift
 //  VideoGames
 //
 //  Created by Bilal Ahmad on 2/11/20.
@@ -7,3 +7,12 @@
 //
 
 import Foundation
+
+class Game {
+    
+    var title: String
+    
+    init(title: String) {
+        self.title = title
+    }
+}
