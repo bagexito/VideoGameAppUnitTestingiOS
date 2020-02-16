@@ -24,8 +24,8 @@ Before we start writing test cases of our GamesListViewModel, lets take a look a
 
 ```
 public protocol GamesListViewModelDelegate {
-
-    func errorDidOccur (vm: GamesListViewModel, message: String)
+    
+    func errorDidOccur (vm: GamesListViewModel)
     func didStartLoading (vm: GamesListViewModel)
     func itemsLoaded (vm: GamesListViewModel)
 }
@@ -37,7 +37,7 @@ public class GamesListViewModel {
 
     /// Represetns is there any error to dislay
     /// True if Yes other wise False
-    public var displayError: Bool { get }
+    public var showError: Bool { get }
 
     /// Error message to display on to the screen
     public var errorMessage: String { get }
@@ -68,15 +68,25 @@ One of the Unit Testing principle is to isolate the test subject and simulate it
 Our test subject GameListViewModel has one dependency i.e. DataService. In order to isolate and simulate enviornment of GameListViewModel, we have to mock DataService behaviours. Following is the mock servicer we will be using:
 
 ```
-public protocol DataService {
-    func loadGames () -> Response<[GameItem], Error>
+protocol DataService {
+    func loadGames(_ completion: @escaping ([Game]?, Error?) -> Void)
 }
 
-public struct MockDataService : DataService {
+struct MockDataService : DataService {
 
-    public func loadGames () -> Response<[GameItem], Error> {
-
-
+    var games: [Game]?
+    var error: Error?
+    
+    func loadGames(_ completion: @escaping ([Game]?, Error?) -> Void) {
+        
+        DispatchQueue.main.async {
+            
+            guard let games = self.games else {
+                completion(nil, self.error!)
+                return
+            }
+            completion(games, nil)
+        }
     }
 }
 ```
@@ -86,12 +96,12 @@ The GameListViewModel notifies events through GameListViewModelDelegate and to m
 ```
 public struct MonitorGamesListViewModelDelegate : GamesListViewModelDelegate {
 
-    public var errorDidOccurCallback: (_ vm: GamesListViewModel, _ message: String) -> void?
-    public didStartLoadingCallback: (_ vm: GamesListViewModel) -> void?
-    public itemsLoadedCallback: (_ vm: GamesListViewModel) -> void?
-
-    public func errorDidOccur (vm: GamesListViewModel, message: String) {
-        errorDidOccurCallback?(vm, message)
+    public var errorDidOccurCallback: ((_ vm: GamesListViewModel) -> Void)?
+    public var didStartLoadingCallback: ((_ vm: GamesListViewModel) -> Void)?
+    public var itemsLoadedCallback: ((_ vm: GamesListViewModel) -> Void)?
+    
+    public func errorDidOccur (vm: GamesListViewModel) {
+        errorDidOccurCallback?(vm)
     }
     public func didStartLoading (vm: GamesListViewModel) {
         didStartLoadingCallback?(vm)
@@ -104,19 +114,146 @@ public struct MonitorGamesListViewModelDelegate : GamesListViewModelDelegate {
 
 ###Lets Start Testing
 
+In our first test case we will test the behaviour of GamesListViewModel if data is loaded successfully with none empty list. To do that we tell MockDataService to send games list with one item and will check the GamesListViewModel response using MonitorGamesListViewModelDelegate.
 
 ```
 /// After successfully loading games list
+/// Expected behaviour:
+/// - only show loading should be true and started loading should be called
+/// - items loaded should be called and items count should be correct
+func testDataLoadSuccessfully() {
+    
+    // setting up expectations
+    let startedLoadingExpectation = expectation(description: "got callback start loading")
+    let itemsLoadedExpectation = expectation(description: "items loaded expectation")
+    
+    // simulating the enviornment
+    mockDataService.error = nil
+    mockDataService.games = [ Game(title: "Happy life") ]
+    
+    // setting up response monitors
+    responseMonitor.didStartLoadingCallback = { vm in
+        XCTAssert(vm.showLoading, "Loading flag should be true")
+        XCTAssert(!vm.showError, "Error flag should not be true")
+        startedLoadingExpectation.fulfill()
+    }
+    responseMonitor.errorDidOccurCallback = { _ in
+        XCTAssert(false, "Invalid error callback")
+    }
+    responseMonitor.itemsLoadedCallback = { vm in
+        XCTAssert(!vm.showLoading, "Loading flag should not be true")
+        XCTAssert(!vm.showError, "Error flag should not be true")
+        XCTAssert(vm.itemsCount == 1, "Invalid items loaded")
+        itemsLoadedExpectation.fulfill()
+    }
+    
+    // performing action
+    vm.loadGames()
+    
+    // check for expectation
+    wait(for: [
+        startedLoadingExpectation,
+        itemsLoadedExpectation
+    ], timeout: 1, enforceOrder: true)
+}
 ```
 
-```
-/// Loading games list ends with 
-```
+In this test case we are performing five steps:
+1. Defined expectations that should be fullfiled before test exit. 
+2. Setting up the dependencies to send valid response with none empty games list. 
+3. Setting up the response monitor that listenes to events and asserts the expected state of ViewModel. 
+4. Simulating "loadGames" action on ViewModel. 
+5. Waiting for expectations to be fullfiled in perticular sequence.
 
+In similar way, we will test what if loading data request fails with error. According to our requirement showError should be true and errorMessage should say "Unable to load games. Please try again !".
+```
+/// Loading games list ends with error
+func testDataLoadedWithError() {
+        
+    // setting up expectation
+    let startedLoadingExpectation = expectation(description: "got callback start loading.")
+    let errorOccuredExpectation = expectation(description: "loading error expectation.")
+    
+    // simulating the enviornment
+    mockDataService.error = AppDataServiceError.invalidResponse
+    mockDataService.games = nil
+    
+    // setting up response monitors
+    responseMonitor.didStartLoadingCallback = { vm in
+        XCTAssert(vm.showLoading, "Loading flag should be true.")
+        XCTAssert(!vm.showError, "Error flag should not be true.")
+        startedLoadingExpectation.fulfill()
+    }
+    responseMonitor.errorDidOccurCallback = { vm in
+        
+        XCTAssert(!vm.showLoading, "Loading flag should not be true.")
+        XCTAssert(vm.showError, "Error flag should be true.")
+        XCTAssert(vm.errorMessage == "Unable to load games. Please try again !",
+                    "Invalid error message.")
+        XCTAssert(vm.itemsCount == 0, "Items count should be 0.")
+        errorOccuredExpectation.fulfill()
+    }
+    responseMonitor.itemsLoadedCallback = { _ in
+        
+        XCTAssert(false, "Items loaded callback should not be called.")
+    }
+    
+    // performing action
+    vm.loadGames()
+    
+    // check for expectation
+    wait(for: [
+        startedLoadingExpectation,
+        errorOccuredExpectation
+    ], timeout: 1, enforceOrder: true)
+}
+```
+Now our final case, data loaded successfully but game list is empty. Desired result in this case is, showError should be true and errorMessage should say "No games available at the moment." 
 ```
 /// Loaded games list is empty
+func testDataLoadedWithEmptyList() {
+        
+    // setting up expectation
+    let startedLoadingExpectation = expectation(description: "got callback start loading.")
+    let errorOccuredExpectation = expectation(description: "loading error expectation.")
+    
+    // simulating the enviornment
+    mockDataService.error = nil
+    mockDataService.games = []
+    
+    // setting up response monitors
+    responseMonitor.didStartLoadingCallback = { vm in
+        XCTAssert(vm.showLoading, "Loading flag should be true.")
+        XCTAssert(!vm.showError, "Error flag should not be true.")
+        startedLoadingExpectation.fulfill()
+    }
+    responseMonitor.errorDidOccurCallback = { vm in
+        
+        XCTAssert(!vm.showLoading, "Loading flag should not be true.")
+        XCTAssert(vm.showError, "Error flag should be true.")
+        XCTAssert(vm.errorMessage == "No games available at the moment.",
+                    "Invalid error message.")
+        XCTAssert(vm.itemsCount == 0, "Items count should be 0.")
+        errorOccuredExpectation.fulfill()
+    }
+    responseMonitor.itemsLoadedCallback = { _ in
+        
+        XCTAssert(false, "Items loaded callback should not be called.")
+    }
+    
+    // performing action
+    vm.loadGames()
+    
+    // check for expectation
+    wait(for: [
+        startedLoadingExpectation,
+        errorOccuredExpectation
+    ], timeout: 1, enforceOrder: true)
+}
 ```
 
 ###Conclusion
 
-We have seen how we can prepare our app for Unit Testing and use MVVM to test View state. We have implemented some test cases and see how we verify View Model behaviour. 
+We have seen how MVVM makes it easy to simulate the user behaviour without dealing with the view. We have written three test cases to see how we can test different states of the View. 
+
+You can download the final project from here. Also if you have any question or suggestion drop a comment below. 
