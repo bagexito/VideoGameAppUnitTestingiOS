@@ -1,12 +1,12 @@
-##Unit Testing with MVVM in iOS
+## Unit Testing with MVVM in iOS
 
 In this tutorial we will implement Unit Tests for our app View and we will see how MVVM provides easy way to test different states of the View.
 
-###A Quick Overview of MVVM
+### A Quick Overview of MVVM
 
 In my previous article "MVVM an Improvement on MVC", we have seen how MVVM separates the View State from the Controller in ViewModel. We can drive View states represented by ViewModel in  isolation. Which provides us the ability to write test cases to verify different behaviors of View.
 
-###The Test Subject
+### The Test Subject
 
 In this tutorial we will be testing "Video Games" application. It's a simple app that loads and display a list of Games on home screen. Our app flow is as follows:
 
@@ -18,7 +18,7 @@ In this tutorial we will be testing "Video Games" application. It's a simple app
 
 I have compiled a starter project so that you can practice as we proceed. Download the project from here and open the project in Starter folder to get started. 
 
-###Games List View Model
+### Games List View Model
 
 Before we start writing test cases of our GamesListViewModel, lets take a look at its behaviour. You can find GamesListViewModel in the root of starter porject. 
 
@@ -61,7 +61,7 @@ public class GamesListViewModel {
 
 In GameListViewModel we are exposing all the state information, state change notification (GameListViewModelDelegate) and actions that UI can initiate. GameListViewModel has one dependency that is DataService which allows us to load Game list.
 
-###Prepare Test Enviornment
+### Prepare Test Enviornment
 
 One of the Unit Testing principle is to isolate the test subject and simulate its dependencies in order to test all the possible cases.
 
@@ -112,7 +112,7 @@ public struct MonitorGamesListViewModelDelegate : GamesListViewModelDelegate {
 }
 ```
 
-###Lets Start Testing
+### Lets Start Testing
 
 In our first test case we will test the behaviour of GamesListViewModel if data is loaded successfully with none empty list. To do that we tell MockDataService to send games list with one item and will check the GamesListViewModel response using MonitorGamesListViewModelDelegate.
 
@@ -252,7 +252,7 @@ func testDataLoadedWithEmptyList() {
 }
 ```
 
-###Conclusion
+### Conclusion
 
 We have seen how MVVM makes it easy to simulate the user behaviour without dealing with the view. We have written three test cases to see how we can test different states of the View. 
 
